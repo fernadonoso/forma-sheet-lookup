@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Forma Sheet Lookup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      max-width: 480px;
+      width: 100%;
+      padding: 32px 28px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .logo-icon { font-size: 28px; }
+    .logo-text { font-size: 18px; font-weight: 700; color: #1B6EC2; }
+
+    h1 { font-size: 15px; color: #444; font-weight: 600; margin-bottom: 4px; }
+
+    .sheet-number {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f1f3d;
+      letter-spacing: 0.5px;
+      margin-bottom: 24px;
+      word-break: break-all;
+    }
+
+    .status-block {
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .status-block.loading  { background: #E3F2FD; }
+    .status-block.found    { background: #E8F5E9; border-left: 4px solid #28A745; }
+    .status-block.notfound { background: #FFF8E1; border-left: 4px solid #FFC107; }
+    .status-block.error    { background: #FFEBEE; border-left: 4px solid #DC3545; }
+
+    .status-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 4px; }
+    .status-value { font-size: 16px; font-weight: 700; color: #1a1a1a; }
+    .status-sub   { font-size: 12px; color: #555; margin-top: 4px; }
+
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 3px solid #ccc;
+      border-top-color: #1B6EC2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      margin-bottom: 10px;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn-primary   { background: #0078D4; color: #fff; }
+    .btn-secondary { background: #6F42C1; color: #fff; }
+    .btn-outline   { background: #fff; color: #0078D4; border: 2px solid #0078D4; }
+
+    .divider { height: 1px; background: #eee; margin: 20px 0; }
+
+    .footer { font-size: 11px; color: #aaa; text-align: center; margin-top: 16px; }
+
+    #login-section { text-align: center; }
+    #login-section p { font-size: 14px; color: #555; margin-bottom: 16px; line-height: 1.5; }
+
+    .tag {
+      display: inline-block;
+      background: #E3F2FD;
+      color: #0078D4;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <div class="logo">
+    <span class="logo-icon">📋</span>
+    <span class="logo-text">Forma Sheets Lookup</span>
+  </div>
+
+  <!-- Sheet number always shown -->
+  <h1>Sheet Number</h1>
+  <div class="sheet-number" id="sheet-number-display">—</div>
+
+  <!-- LOGIN section -->
+  <div id="login-section" class="hidden">
+    <p>Sign in with your Autodesk account to look up this sheet in Forma Build Sheets.</p>
+    <button class="btn btn-primary" onclick="startLogin()">🔐 Sign in with Autodesk</button>
+    <p style="font-size:12px;color:#aaa;margin-top:8px;">You only need to sign in once. Your session is saved in this browser.</p>
+  </div>
+
+  <!-- RESULT section -->
+  <div id="result-section" class="hidden">
+    <div id="status-block" class="status-block loading">
+      <div class="status-label">Status</div>
+      <div class="status-value"><span class="spinner"></span> Looking up sheet…</div>
+    </div>
+
+    <div id="action-buttons" class="hidden">
+      <a id="open-btn" href="#" target="_blank" class="btn btn-secondary">🏗️ Open in Forma Sheets</a>
+      <button class="btn btn-outline" onclick="startLogin(true)">🔄 Switch Account</button>
+    </div>
+  </div>
+
+  <div class="footer">Forma Sheets Add-in &nbsp;·&nbsp; Autodesk ACC</div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+// CONFIGURATION — update CLIENT_ID after registering your APS app
+// ─────────────────────────────────────────────────────────────────
+const CONFIG = {
+  // Register a NEW APS app at https://aps.autodesk.com/myapps/
+  // App type: "Web App", grant type: "Authorization Code with PKCE"
+  // Add this page's URL as a callback:  https://{you}.github.io/forma-sheet-lookup/
+  CLIENT_ID:    'gcb3X3M1hClSKQTR9WAnexs1hFfupeVPzP5yXgl70u5wNex4',
+
+  // Must match exactly what you registered in the APS app
+  REDIRECT_URI: window.location.origin + window.location.pathname,
+
+  SCOPES: 'data:read',
+
+  AUTH_URL:   'https://developer.api.autodesk.com/authentication/v2/authorize',
+  TOKEN_URL:  'https://developer.api.autodesk.com/authentication/v2/token',
+  SHEETS_API: 'https://developer.api.autodesk.com/construction/sheets/v1',
+  ACC_BASE:   'https://acc.autodesk.com',   // or https://acc.autodesk.eu for EU
+};
+
+// ─────────────────────────────────────────────────────────────────
+// URL PARAMS
+// ─────────────────────────────────────────────────────────────────
+const params    = new URLSearchParams(window.location.search);
+const sheetNum  = params.get('n') || '';   // e.g. "Eb007-02-ZZZ-V5"
+const projectId = params.get('p') || '';   // e.g. "9ba6681e-..." (without b. prefix)
+
+document.getElementById('sheet-number-display').textContent = sheetNum || '(no sheet number)';
+document.title = sheetNum ? `${sheetNum} – Forma Sheets` : 'Forma Sheets Lookup';
+
+// ─────────────────────────────────────────────────────────────────
+// PKCE HELPERS
+// ─────────────────────────────────────────────────────────────────
+function randomBase64url(len) {
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+async function sha256base64url(plain) {
+  const enc  = new TextEncoder().encode(plain);
+  const hash = await crypto.subtle.digest('SHA-256', enc);
+  return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TOKEN STORAGE
+// ─────────────────────────────────────────────────────────────────
+const LS = {
+  KEY: 'aps_token_v1',
+  save(token, expiresIn) {
+    localStorage.setItem(this.KEY, JSON.stringify({
+      token,
+      expiry: Date.now() + (expiresIn - 60) * 1000
+    }));
+  },
+  load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(this.KEY) || 'null');
+      if (d && d.expiry > Date.now()) return d.token;
+    } catch(_) {}
+    return null;
+  },
+  clear() { localStorage.removeItem(this.KEY); }
+};
+
+// ─────────────────────────────────────────────────────────────────
+// AUTH FLOW
+// ─────────────────────────────────────────────────────────────────
+async function startLogin(forceReauth = false) {
+  if (forceReauth) LS.clear();
+
+  const verifier  = randomBase64url(64);
+  const challenge = await sha256base64url(verifier);
+  const state     = randomBase64url(16);
+
+  // Store verifier + original QR params so we can restore after redirect
+  sessionStorage.setItem('pkce_verifier', verifier);
+  sessionStorage.setItem('pkce_state',    state);
+  sessionStorage.setItem('qr_n', sheetNum);
+  sessionStorage.setItem('qr_p', projectId);
+
+  const url = new URL(CONFIG.AUTH_URL);
+  url.searchParams.set('response_type',          'code');
+  url.searchParams.set('client_id',              CONFIG.CLIENT_ID);
+  url.searchParams.set('redirect_uri',           CONFIG.REDIRECT_URI);
+  url.searchParams.set('scope',                  CONFIG.SCOPES);
+  url.searchParams.set('state',                  state);
+  url.searchParams.set('code_challenge',         challenge);
+  url.searchParams.set('code_challenge_method',  'S256');
+
+  window.location.href = url.toString();
+}
+
+async function handleCallback() {
+  const code     = params.get('code');
+  const retState = params.get('state');
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  const origState= sessionStorage.getItem('pkce_state');
+
+  if (!code || !verifier || retState !== origState) return false;
+
+  // Clean URL
+  const cleanUrl = window.location.origin + window.location.pathname +
+    '?n=' + encodeURIComponent(sessionStorage.getItem('qr_n') || '') +
+    '&p=' + encodeURIComponent(sessionStorage.getItem('qr_p') || '');
+  history.replaceState({}, '', cleanUrl);
+
+  const body = new URLSearchParams({
+    grant_type:    'authorization_code',
+    client_id:     CONFIG.CLIENT_ID,
+    redirect_uri:  CONFIG.REDIRECT_URI,
+    code,
+    code_verifier: verifier,
+  });
+
+  const resp = await fetch(CONFIG.TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+
+  if (!resp.ok) throw new Error(`Token exchange failed: ${resp.status}`);
+  const data = await resp.json();
+  LS.save(data.access_token, data.expires_in);
+  sessionStorage.removeItem('pkce_verifier');
+  sessionStorage.removeItem('pkce_state');
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ACC API LOOKUP
+// ─────────────────────────────────────────────────────────────────
+async function lookupSheet(token, projId, number) {
+  const cleanId = projId.startsWith('b.') ? projId.slice(2) : projId;
+  const encoded = encodeURIComponent(number);
+  const url = `${CONFIG.SHEETS_API}/projects/${encodeURIComponent(cleanId)}/sheets?filter[number]=${encoded}&currentOnly=true&limit=5`;
+
+  const resp = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  if (resp.status === 401) { LS.clear(); throw new Error('401'); }
+  if (!resp.ok)            throw new Error(`API error ${resp.status}`);
+
+  const data = await resp.json();
+  const results = data.results || data.data || [];
+
+  // Find exact match on number field
+  const match = results.find(s =>
+    (s.number || '').toLowerCase() === number.toLowerCase()
+  ) || results[0];
+
+  return match || null;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────────────────────────
+function showStatus(type, html, sub = '') {
+  const block = document.getElementById('status-block');
+  block.className = `status-block ${type}`;
+  block.innerHTML = `
+    <div class="status-label">Status</div>
+    <div class="status-value">${html}</div>
+    ${sub ? `<div class="status-sub">${sub}</div>` : ''}
+  `;
+}
+
+function buildAccUrl(projId, sheetId) {
+  const cleanId = projId.startsWith('b.') ? projId.slice(2) : projId;
+  return `${CONFIG.ACC_BASE}/build/sheets/projects/${cleanId}?moduleId=2d&entityId=${sheetId}`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// MAIN
+// ─────────────────────────────────────────────────────────────────
+async function main() {
+  if (!sheetNum || !projectId) {
+    document.getElementById('login-section').classList.add('hidden');
+    document.getElementById('result-section').classList.remove('hidden');
+    showStatus('error', '⚠️ Invalid QR Code', 'Missing sheet number or project ID. Please scan the QR code again.');
+    return;
+  }
+
+  // Handle OAuth callback
+  if (params.get('code')) {
+    document.getElementById('result-section').classList.remove('hidden');
+    showStatus('loading', '<span class="spinner"></span> Signing in…');
+    try {
+      await handleCallback();
+    } catch(e) {
+      showStatus('error', '❌ Sign-in failed', e.message);
+      return;
+    }
+  }
+
+  // Check stored token
+  let token = LS.load();
+
+  if (!token) {
+    document.getElementById('login-section').classList.remove('hidden');
+    return;
+  }
+
+  // We have a token — look up the sheet
+  document.getElementById('result-section').classList.remove('hidden');
+  showStatus('loading', '<span class="spinner"></span> Looking up sheet…');
+
+  try {
+    const sheet = await lookupSheet(token, projectId, sheetNum);
+
+    if (!sheet) {
+      showStatus('notfound',
+        '⏳ Not yet in Forma Sheets',
+        'This sheet version has not been published yet. Check back after the next export.'
+      );
+      return;
+    }
+
+    const vsName  = sheet.versionSet?.name  || sheet.versionSetName || '—';
+    const vsDate  = sheet.versionSet?.issuanceDate ? ` &nbsp;·&nbsp; ${sheet.versionSet.issuanceDate}` : '';
+    const title   = sheet.title || sheet.name || '';
+    const tags    = (sheet.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
+
+    showStatus('found',
+      `✅ ${vsName}${vsDate}`,
+      `${title ? `<strong>${title}</strong><br>` : ''}` +
+      `Sheet ID: ${sheet.id}` +
+      (tags ? `<br>${tags}` : '')
+    );
+
+    // Wire up the Open button
+    const openBtn = document.getElementById('open-btn');
+    openBtn.href = buildAccUrl(projectId, sheet.id);
+    document.getElementById('action-buttons').classList.remove('hidden');
+
+  } catch(e) {
+    if (e.message === '401') {
+      LS.clear();
+      showStatus('error', '🔑 Session expired', 'Your sign-in expired.');
+      document.getElementById('login-section').classList.remove('hidden');
+      document.getElementById('result-section').classList.add('hidden');
+    } else {
+      showStatus('error', '❌ Lookup failed', e.message);
+    }
+  }
+}
+
+main();
+</script>
+</body>
+</html>
