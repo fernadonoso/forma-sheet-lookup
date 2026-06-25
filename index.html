@@ -120,7 +120,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
-const ACC_BASE = 'https://acc.autodesk.com'; // change to https://acc.autodesk.eu if needed
+const ACC_BASE = 'https://acc.autodesk.eu'; // change to https://acc.autodesk.com for US
 
 // ─────────────────────────────────────────────────────────────────────────────
 // READ QR PARAMS  ?n=Eb007-02-ZZZ-V5  &p=9ba6681e-...
@@ -139,7 +139,7 @@ if (!sheetNum || !projectId) {
   document.getElementById('error-block').classList.remove('hidden');
 } else {
   const cleanId = projectId.startsWith('b.') ? projectId.slice(2) : projectId;
-  const accUrl  = `${ACC_BASE}/build/sheets/projects/${cleanId}?moduleId=2d&search=${encodeURIComponent(sheetNum)}`;
+  const accUrl  = `${ACC_BASE}/build/sheets/projects/${cleanId}?moduleId=2d&searchText=${encodeURIComponent(sheetNum)}`;
   window.location.replace(accUrl);
 }
 </script>
