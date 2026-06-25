@@ -51,63 +51,39 @@
       padding: 16px;
       margin-bottom: 20px;
     }
-    .status-block.loading  { background: #E3F2FD; }
-    .status-block.found    { background: #E8F5E9; border-left: 4px solid #28A745; }
-    .status-block.notfound { background: #FFF8E1; border-left: 4px solid #FFC107; }
-    .status-block.error    { background: #FFEBEE; border-left: 4px solid #DC3545; }
+    .status-block.error { background: #FFEBEE; border-left: 4px solid #DC3545; }
 
     .status-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 4px; }
     .status-value { font-size: 16px; font-weight: 700; color: #1a1a1a; }
     .status-sub   { font-size: 12px; color: #555; margin-top: 4px; }
 
-    .spinner {
-      display: inline-block;
-      width: 18px; height: 18px;
-      border: 3px solid #ccc;
-      border-top-color: #1B6EC2;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      vertical-align: middle;
-      margin-right: 8px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
     .btn {
       display: block;
       width: 100%;
-      padding: 14px;
+      padding: 16px;
       border: none;
       border-radius: 8px;
-      font-size: 15px;
-      font-weight: 600;
+      font-size: 16px;
+      font-weight: 700;
       cursor: pointer;
       text-align: center;
       text-decoration: none;
-      margin-bottom: 10px;
       transition: opacity 0.15s;
+      color: #fff;
+      background: #6F42C1;
+      margin-bottom: 10px;
     }
     .btn:hover { opacity: 0.88; }
-    .btn-primary   { background: #0078D4; color: #fff; }
-    .btn-secondary { background: #6F42C1; color: #fff; }
-    .btn-outline   { background: #fff; color: #0078D4; border: 2px solid #0078D4; }
 
-    .divider { height: 1px; background: #eee; margin: 20px 0; }
-
-    .footer { font-size: 11px; color: #aaa; text-align: center; margin-top: 16px; }
-
-    #login-section { text-align: center; }
-    #login-section p { font-size: 14px; color: #555; margin-bottom: 16px; line-height: 1.5; }
-
-    .tag {
-      display: inline-block;
-      background: #E3F2FD;
-      color: #0078D4;
-      border-radius: 4px;
-      padding: 2px 8px;
+    .hint {
       font-size: 12px;
-      font-weight: 600;
-      margin-right: 4px;
+      color: #888;
+      text-align: center;
+      margin-top: 8px;
+      line-height: 1.5;
     }
+
+    .footer { font-size: 11px; color: #aaa; text-align: center; margin-top: 24px; }
 
     .hidden { display: none !important; }
   </style>
@@ -120,294 +96,52 @@
     <span class="logo-text">Forma Sheets Lookup</span>
   </div>
 
-  <!-- Sheet number always shown -->
   <h1>Sheet Number</h1>
   <div class="sheet-number" id="sheet-number-display">—</div>
 
-  <!-- LOGIN section -->
-  <div id="login-section" class="hidden">
-    <p>Sign in with your Autodesk account to look up this sheet in Forma Build Sheets.</p>
-    <button class="btn btn-primary" onclick="startLogin()">🔐 Sign in with Autodesk</button>
-    <p style="font-size:12px;color:#aaa;margin-top:8px;">You only need to sign in once. Your session is saved in this browser.</p>
+  <div id="error-block" class="status-block error hidden">
+    <div class="status-label">Status</div>
+    <div class="status-value">⚠️ Invalid QR Code</div>
+    <div class="status-sub">Missing sheet number or project ID. Please scan the QR code again.</div>
   </div>
 
-  <!-- RESULT section -->
-  <div id="result-section" class="hidden">
-    <div id="status-block" class="status-block loading">
-      <div class="status-label">Status</div>
-      <div class="status-value"><span class="spinner"></span> Looking up sheet…</div>
-    </div>
+  <a id="open-btn" href="#" target="_blank" class="btn hidden">
+    🏗️ Open in ACC Build Sheets
+  </a>
 
-    <div id="action-buttons" class="hidden">
-      <a id="open-btn" href="#" target="_blank" class="btn btn-secondary">🏗️ Open in Forma Sheets</a>
-      <button class="btn btn-outline" onclick="startLogin(true)">🔄 Switch Account</button>
-    </div>
-  </div>
+  <p class="hint" id="hint-text" class="hidden">
+    You will need to sign in to your Autodesk account in ACC.
+  </p>
 
   <div class="footer">Forma Sheets Add-in &nbsp;·&nbsp; Autodesk ACC</div>
 </div>
 
 <script>
-// ─────────────────────────────────────────────────────────────────
-// CONFIGURATION — update CLIENT_ID after registering your APS app
-// ─────────────────────────────────────────────────────────────────
-const CONFIG = {
-    CLIENT_ID:    'GIuoXXlexqFQUZV1bkcaV11K2uwKgRqEMTCFs920n1vzeaEs',
-
-  // Must match exactly what you registered in the APS app
-  REDIRECT_URI: window.location.origin + window.location.pathname,
-
-  SCOPES: 'data:read',
-
-  AUTH_URL:   'https://developer.api.autodesk.com/authentication/v2/authorize',
-  TOKEN_URL:  'https://developer.api.autodesk.com/authentication/v2/token',
-  SHEETS_API: 'https://developer.api.autodesk.com/construction/sheets/v1',
-  ACC_BASE:   'https://acc.autodesk.com',   // or https://acc.autodesk.eu for EU
-};
-
-// ─────────────────────────────────────────────────────────────────
-// URL PARAMS
-// ─────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
-// URL PARAMS
-// When Autodesk redirects back after login the URL contains ?code=&state= but
-// NOT ?n=&p=, so we fall back to the values saved in sessionStorage by
-// startLogin() before redirecting to Autodesk.
+// CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
-const params = new URLSearchParams(window.location.search);
+const ACC_BASE = 'https://acc.autodesk.com'; // change to https://acc.autodesk.eu if needed
 
-// If this is the OAuth callback (?code= present) restore n/p from sessionStorage.
-const isCallback = !!params.get('code');
-const sheetNum  = params.get('n') || (isCallback ? sessionStorage.getItem('qr_n') : '') || '';
-const projectId = params.get('p') || (isCallback ? sessionStorage.getItem('qr_p') : '') || '';
+// ─────────────────────────────────────────────────────────────────────────────
+// READ QR PARAMS  ?n=Eb007-02-ZZZ-V5  &p=9ba6681e-...
+// ─────────────────────────────────────────────────────────────────────────────
+const params    = new URLSearchParams(window.location.search);
+const sheetNum  = params.get('n') || '';
+const projectId = params.get('p') || '';
 
 document.getElementById('sheet-number-display').textContent = sheetNum || '(no sheet number)';
 document.title = sheetNum ? `${sheetNum} – Forma Sheets` : 'Forma Sheets Lookup';
 
-// ─────────────────────────────────────────────────────────────────
-// PKCE HELPERS
-// ─────────────────────────────────────────────────────────────────
-function randomBase64url(len) {
-  const arr = new Uint8Array(len);
-  crypto.getRandomValues(arr);
-  return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-}
-
-async function sha256base64url(plain) {
-  const enc  = new TextEncoder().encode(plain);
-  const hash = await crypto.subtle.digest('SHA-256', enc);
-  return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-}
-
-// ─────────────────────────────────────────────────────────────────
-// TOKEN STORAGE
-// ─────────────────────────────────────────────────────────────────
-const LS = {
-  KEY: 'aps_token_v1',
-  save(token, expiresIn) {
-    localStorage.setItem(this.KEY, JSON.stringify({
-      token,
-      expiry: Date.now() + (expiresIn - 60) * 1000
-    }));
-  },
-  load() {
-    try {
-      const d = JSON.parse(localStorage.getItem(this.KEY) || 'null');
-      if (d && d.expiry > Date.now()) return d.token;
-    } catch(_) {}
-    return null;
-  },
-  clear() { localStorage.removeItem(this.KEY); }
-};
-
-// ─────────────────────────────────────────────────────────────────
-// AUTH FLOW
-// ─────────────────────────────────────────────────────────────────
-async function startLogin(forceReauth = false) {
-  if (forceReauth) LS.clear();
-
-  const verifier  = randomBase64url(64);
-  const challenge = await sha256base64url(verifier);
-  const state     = randomBase64url(16);
-
-  // Store verifier + original QR params so we can restore after redirect
-  sessionStorage.setItem('pkce_verifier', verifier);
-  sessionStorage.setItem('pkce_state',    state);
-  sessionStorage.setItem('qr_n', sheetNum);
-  sessionStorage.setItem('qr_p', projectId);
-
-  const url = new URL(CONFIG.AUTH_URL);
-  url.searchParams.set('response_type',          'code');
-  url.searchParams.set('client_id',              CONFIG.CLIENT_ID);
-  url.searchParams.set('redirect_uri',           CONFIG.REDIRECT_URI);
-  url.searchParams.set('scope',                  CONFIG.SCOPES);
-  url.searchParams.set('state',                  state);
-  url.searchParams.set('code_challenge',         challenge);
-  url.searchParams.set('code_challenge_method',  'S256');
-
-  window.location.href = url.toString();
-}
-
-async function handleCallback() {
-  const code     = params.get('code');
-  const retState = params.get('state');
-  const verifier = sessionStorage.getItem('pkce_verifier');
-  const origState= sessionStorage.getItem('pkce_state');
-
-  if (!code || !verifier || retState !== origState) return false;
-
-  // Clean URL
-  const cleanUrl = window.location.origin + window.location.pathname +
-    '?n=' + encodeURIComponent(sessionStorage.getItem('qr_n') || '') +
-    '&p=' + encodeURIComponent(sessionStorage.getItem('qr_p') || '');
-  history.replaceState({}, '', cleanUrl);
-
-  const body = new URLSearchParams({
-    grant_type:    'authorization_code',
-    client_id:     CONFIG.CLIENT_ID,
-    redirect_uri:  CONFIG.REDIRECT_URI,
-    code,
-    code_verifier: verifier,
-  });
-
-  const resp = await fetch(CONFIG.TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  });
-
-  if (!resp.ok) throw new Error(`Token exchange failed: ${resp.status}`);
-  const data = await resp.json();
-  LS.save(data.access_token, data.expires_in);
-  sessionStorage.removeItem('pkce_verifier');
-  sessionStorage.removeItem('pkce_state');
-  return true;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// ACC API LOOKUP
-// ─────────────────────────────────────────────────────────────────
-async function lookupSheet(token, projId, number) {
-  const cleanId = projId.startsWith('b.') ? projId.slice(2) : projId;
-  const encoded = encodeURIComponent(number);
-  const url = `${CONFIG.SHEETS_API}/projects/${encodeURIComponent(cleanId)}/sheets?filter[number]=${encoded}&currentOnly=true&limit=5`;
-
-  const resp = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-
-  if (resp.status === 401) { LS.clear(); throw new Error('401'); }
-  if (!resp.ok)            throw new Error(`API error ${resp.status}`);
-
-  const data = await resp.json();
-  const results = data.results || data.data || [];
-
-  // Find exact match on number field
-  const match = results.find(s =>
-    (s.number || '').toLowerCase() === number.toLowerCase()
-  ) || results[0];
-
-  return match || null;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// UI HELPERS
-// ─────────────────────────────────────────────────────────────────
-function showStatus(type, html, sub = '') {
-  const block = document.getElementById('status-block');
-  block.className = `status-block ${type}`;
-  block.innerHTML = `
-    <div class="status-label">Status</div>
-    <div class="status-value">${html}</div>
-    ${sub ? `<div class="status-sub">${sub}</div>` : ''}
-  `;
-}
-
-function buildAccUrl(projId, sheetId) {
-  const cleanId = projId.startsWith('b.') ? projId.slice(2) : projId;
-  return `${CONFIG.ACC_BASE}/build/sheets/projects/${cleanId}?moduleId=2d&entityId=${sheetId}`;
-}
-
-// ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN
-// ─────────────────────────────────────────────────────────────────
-async function main() {
-  // ── Step 1: Handle OAuth callback FIRST (before any guard checks) ──────────
-  // When Autodesk redirects back the URL has ?code=&state= not ?n=&p=.
-  // handleCallback() exchanges the code for a token, then rewrites the URL to
-  // ?n=…&p=… using values saved in sessionStorage by startLogin().
-  if (params.get('code')) {
-    document.getElementById('result-section').classList.remove('hidden');
-    showStatus('loading', '<span class="spinner"></span> Signing in…');
-    try {
-      await handleCallback();
-    } catch(e) {
-      showStatus('error', '❌ Sign-in failed', e.message);
-      return;
-    }
-  }
-
-  // ── Step 2: Validate that we have both required params ─────────────────────
-  if (!sheetNum || !projectId) {
-    document.getElementById('login-section').classList.add('hidden');
-    document.getElementById('result-section').classList.remove('hidden');
-    showStatus('error', '⚠️ Invalid QR Code', 'Missing sheet number or project ID. Please scan the QR code again.');
-    return;
-  }
-
-  // ── Step 3: Check stored token ─────────────────────────────────────────────
-  let token = LS.load();
-
-  if (!token) {
-    document.getElementById('login-section').classList.remove('hidden');
-    return;
-  }
-
-  // We have a token — look up the sheet
-  document.getElementById('result-section').classList.remove('hidden');
-  showStatus('loading', '<span class="spinner"></span> Looking up sheet…');
-
-  try {
-    const sheet = await lookupSheet(token, projectId, sheetNum);
-
-    if (!sheet) {
-      showStatus('notfound',
-        '⏳ Not yet in Forma Sheets',
-        'This sheet version has not been published yet. Check back after the next export.'
-      );
-      return;
-    }
-
-    const vsName  = sheet.versionSet?.name  || sheet.versionSetName || '—';
-    const vsDate  = sheet.versionSet?.issuanceDate ? ` &nbsp;·&nbsp; ${sheet.versionSet.issuanceDate}` : '';
-    const title   = sheet.title || sheet.name || '';
-    const tags    = (sheet.tags || []).map(t => `<span class="tag">${t}</span>`).join('');
-
-    showStatus('found',
-      `✅ ${vsName}${vsDate}`,
-      `${title ? `<strong>${title}</strong><br>` : ''}` +
-      `Sheet ID: ${sheet.id}` +
-      (tags ? `<br>${tags}` : '')
-    );
-
-    // Wire up the Open button
-    const openBtn = document.getElementById('open-btn');
-    openBtn.href = buildAccUrl(projectId, sheet.id);
-    document.getElementById('action-buttons').classList.remove('hidden');
-
-  } catch(e) {
-    if (e.message === '401') {
-      LS.clear();
-      showStatus('error', '🔑 Session expired', 'Your sign-in expired.');
-      document.getElementById('login-section').classList.remove('hidden');
-      document.getElementById('result-section').classList.add('hidden');
-    } else {
-      showStatus('error', '❌ Lookup failed', e.message);
-    }
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+if (!sheetNum || !projectId) {
+  document.getElementById('error-block').classList.remove('hidden');
+} else {
+  const cleanId = projectId.startsWith('b.') ? projectId.slice(2) : projectId;
+  const accUrl  = `${ACC_BASE}/build/sheets/projects/${cleanId}?moduleId=2d&search=${encodeURIComponent(sheetNum)}`;
+  window.location.replace(accUrl);
 }
-
-main();
 </script>
 </body>
 </html>
