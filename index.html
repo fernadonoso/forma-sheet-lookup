@@ -152,9 +152,6 @@
 // CONFIGURATION — update CLIENT_ID after registering your APS app
 // ─────────────────────────────────────────────────────────────────
 const CONFIG = {
-  // Register a NEW APS app at https://aps.autodesk.com/myapps/
-  // App type: "Web App", grant type: "Authorization Code with PKCE"
-  // Add this page's URL as a callback:  https://{you}.github.io/forma-sheet-lookup/
   CLIENT_ID:    'gcb3X3M1hClSKQTR9WAnexs1hFfupeVPzP5yXgl70u5wNex4',
 
   // Must match exactly what you registered in the APS app
@@ -171,9 +168,18 @@ const CONFIG = {
 // ─────────────────────────────────────────────────────────────────
 // URL PARAMS
 // ─────────────────────────────────────────────────────────────────
-const params    = new URLSearchParams(window.location.search);
-const sheetNum  = params.get('n') || '';   // e.g. "Eb007-02-ZZZ-V5"
-const projectId = params.get('p') || '';   // e.g. "9ba6681e-..." (without b. prefix)
+// ─────────────────────────────────────────────────────────────────────────────
+// URL PARAMS
+// When Autodesk redirects back after login the URL contains ?code=&state= but
+// NOT ?n=&p=, so we fall back to the values saved in sessionStorage by
+// startLogin() before redirecting to Autodesk.
+// ─────────────────────────────────────────────────────────────────────────────
+const params = new URLSearchParams(window.location.search);
+
+// If this is the OAuth callback (?code= present) restore n/p from sessionStorage.
+const isCallback = !!params.get('code');
+const sheetNum  = params.get('n') || (isCallback ? sessionStorage.getItem('qr_n') : '') || '';
+const projectId = params.get('p') || (isCallback ? sessionStorage.getItem('qr_p') : '') || '';
 
 document.getElementById('sheet-number-display').textContent = sheetNum || '(no sheet number)';
 document.title = sheetNum ? `${sheetNum} – Forma Sheets` : 'Forma Sheets Lookup';
@@ -326,14 +332,10 @@ function buildAccUrl(projId, sheetId) {
 // MAIN
 // ─────────────────────────────────────────────────────────────────
 async function main() {
-  if (!sheetNum || !projectId) {
-    document.getElementById('login-section').classList.add('hidden');
-    document.getElementById('result-section').classList.remove('hidden');
-    showStatus('error', '⚠️ Invalid QR Code', 'Missing sheet number or project ID. Please scan the QR code again.');
-    return;
-  }
-
-  // Handle OAuth callback
+  // ── Step 1: Handle OAuth callback FIRST (before any guard checks) ──────────
+  // When Autodesk redirects back the URL has ?code=&state= not ?n=&p=.
+  // handleCallback() exchanges the code for a token, then rewrites the URL to
+  // ?n=…&p=… using values saved in sessionStorage by startLogin().
   if (params.get('code')) {
     document.getElementById('result-section').classList.remove('hidden');
     showStatus('loading', '<span class="spinner"></span> Signing in…');
@@ -345,7 +347,15 @@ async function main() {
     }
   }
 
-  // Check stored token
+  // ── Step 2: Validate that we have both required params ─────────────────────
+  if (!sheetNum || !projectId) {
+    document.getElementById('login-section').classList.add('hidden');
+    document.getElementById('result-section').classList.remove('hidden');
+    showStatus('error', '⚠️ Invalid QR Code', 'Missing sheet number or project ID. Please scan the QR code again.');
+    return;
+  }
+
+  // ── Step 3: Check stored token ─────────────────────────────────────────────
   let token = LS.load();
 
   if (!token) {
