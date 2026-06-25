@@ -105,6 +105,14 @@
     <div class="status-sub">Missing sheet number or project ID. Please scan the QR code again.</div>
   </div>
 
+  <a id="open-btn" href="#" target="_blank" rel="noreferrer" class="btn hidden">
+    🏗️ Open in ACC Build Sheets
+  </a>
+
+  <p class="hint" id="hint-text" class="hidden">
+    Tap the button to open in your browser.
+  </p>
+
   <div class="footer">Forma Sheets Add-in &nbsp;·&nbsp; Autodesk ACC</div>
 </div>
 
@@ -133,14 +141,16 @@ if (!sheetNum || !projectId) {
   const cleanId = projectId.startsWith('b.') ? projectId.slice(2) : projectId;
   const accUrl  = `${ACC_BASE}/build/sheets/projects/${cleanId}?moduleId=2d&searchText=${encodeURIComponent(sheetNum)}`;
 
-  // Universal Links / App Links only intercept top-level navigations.
-  // Loading the ACC URL inside an iframe is invisible to the OS
-  // app-link system, so the Autodesk app is never triggered and
-  // the page stays in the browser on all devices.
-  const frame = document.createElement('iframe');
-  frame.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;';
-  frame.src = accUrl;
-  document.body.appendChild(frame);
+  // Show the button — user tap opens a new tab, which bypasses
+  // iOS/Android Universal Link interception by the Autodesk app.
+  const btn = document.getElementById('open-btn');
+  btn.href = accUrl;
+  btn.classList.remove('hidden');
+  document.getElementById('hint-text').classList.remove('hidden');
+
+  // NO auto-redirect: automatic navigation triggers Universal Link
+  // interception by the Autodesk app. User-initiated tap with
+  // target="_blank" stays in the browser on all devices.
 }
 </script>
 </body>
